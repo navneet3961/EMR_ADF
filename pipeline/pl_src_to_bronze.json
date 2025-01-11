@@ -1,0 +1,490 @@
+{
+	"name": "pl_src_to_bronze",
+	"properties": {
+		"activities": [
+			{
+				"name": "Lookup variable for data copy from adls to sql server",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": false,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"dataset": {
+						"referenceName": "ds_adls_navneet_emr_csv",
+						"type": "DatasetReference",
+						"parameters": {
+							"Container": {
+								"value": "@pipeline().parameters.Container",
+								"type": "Expression"
+							},
+							"FilePath": {
+								"value": "@pipeline().parameters.FilePath",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach1",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Lookup variable for data copy from adls to sql server",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Lookup variable for data copy from adls to sql server').output.value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "CheckFileExistOrNot",
+							"type": "GetMetadata",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "ds_adls_navneet_emr_parquet",
+									"type": "DatasetReference",
+									"parameters": {
+										"Container": {
+											"value": "@pipeline().parameters.LayerContainer",
+											"type": "Expression"
+										},
+										"FilePath": {
+											"value": "@concat(item().targetpath, '/', item().tablename)",
+											"type": "Expression"
+										}
+									}
+								},
+								"fieldList": [
+									"exists"
+								],
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "ParquetReadSettings"
+								}
+							}
+						},
+						{
+							"name": "If Condition for Archiving Data",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "CheckFileExistOrNot",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@activity('CheckFileExistOrNot').output.exists",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "ArchiveData",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "ParquetSource",
+												"storeSettings": {
+													"type": "AzureBlobFSReadSettings",
+													"recursive": false,
+													"enablePartitionDiscovery": false
+												},
+												"formatSettings": {
+													"type": "ParquetReadSettings"
+												}
+											},
+											"sink": {
+												"type": "ParquetSink",
+												"storeSettings": {
+													"type": "AzureBlobFSWriteSettings"
+												},
+												"formatSettings": {
+													"type": "ParquetWriteSettings"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "ds_adls_navneet_emr_parquet",
+												"type": "DatasetReference",
+												"parameters": {
+													"Container": "@pipeline().parameters.LayerContainer",
+													"FilePath": "@concat(item().targetpath, '/', item().tablename)"
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "ds_adls_navneet_emr_parquet",
+												"type": "DatasetReference",
+												"parameters": {
+													"Container": "@pipeline().parameters.LayerContainer",
+													"FilePath": {
+														"value": "@concat('archive/', item().targetpath, '/', formatDateTime(utcNow(), 'yyyy'), '/', formatDateTime(utcNow(), 'MM'), '/', formatDateTime(utcNow(), 'dd'), '/', item().tablename)",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									}
+								]
+							}
+						},
+						{
+							"name": "If Condition For Loading Data",
+							"description": "",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "If Condition for Archiving Data",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(item().loadtype, 'Full')",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Copy Incremental Data",
+										"type": "Copy",
+										"dependsOn": [
+											{
+												"activity": "Get Latest Load Date",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "SqlServerSource",
+												"sqlReaderQuery": {
+													"value": "@concat('select *,''',item().datasource,''' as datasource from ',item().tablename,' where ',item().watermark,' >= ''',activity('Get Latest Load Date').output.firstRow.last_fetched_date,'''')\n",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"sink": {
+												"type": "ParquetSink",
+												"storeSettings": {
+													"type": "AzureBlobFSWriteSettings"
+												},
+												"formatSettings": {
+													"type": "ParquetWriteSettings"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "ds_sqldb_hospital",
+												"type": "DatasetReference",
+												"parameters": {
+													"DatabaseName": {
+														"value": "@item().database",
+														"type": "Expression"
+													},
+													"TableName": {
+														"value": "@item().tablename",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "ds_adls_navneet_emr_parquet",
+												"type": "DatasetReference",
+												"parameters": {
+													"Container": "@pipeline().parameters.LayerContainer",
+													"FilePath": "@concat(item().targetpath, '/', item().tablename)"
+												}
+											}
+										]
+									},
+									{
+										"name": "Insert Info into Audit for Incremental Load",
+										"type": "Lookup",
+										"dependsOn": [
+											{
+												"activity": "Copy Incremental Data",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureDatabricksDeltaLakeSource",
+												"query": {
+													"value": "@concat('insert into audit.load_logs(data_source, tablename, numberofrowscopied, watermarkcolumnname, loaddate) values(''', item().datasource, ''',''', item().tablename, ''',''', activity('Copy Incremental Data').output.rowscopied, ''',''', item().watermark, ''',''',  formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss'), ''')')\n",
+													"type": "Expression"
+												}
+											},
+											"dataset": {
+												"referenceName": "ds_adb_navneet_emr",
+												"type": "DatasetReference",
+												"parameters": {
+													"SchemaName": "dummy",
+													"TableName": "dummy"
+												}
+											},
+											"firstRowOnly": false
+										}
+									},
+									{
+										"name": "Get Latest Load Date",
+										"type": "Lookup",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureDatabricksDeltaLakeSource",
+												"query": {
+													"value": "@concat('select coalesce(cast(max(loaddate) as date),''','1900-01-01',''') as last_fetched_date from audit.load_logs where',' data_source=''',item().datasource,''' and tablename=''',item().tablename,'''')",
+													"type": "Expression"
+												}
+											},
+											"dataset": {
+												"referenceName": "ds_adb_navneet_emr",
+												"type": "DatasetReference",
+												"parameters": {
+													"SchemaName": "dummy",
+													"TableName": "dummy"
+												}
+											},
+											"firstRowOnly": true
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Copy Full Data",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "SqlServerSource",
+												"sqlReaderQuery": {
+													"value": "@concat('select *, ''', item().datasource, ''' as datasource from ', item().tablename)",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"sink": {
+												"type": "ParquetSink",
+												"storeSettings": {
+													"type": "AzureBlobFSWriteSettings"
+												},
+												"formatSettings": {
+													"type": "ParquetWriteSettings"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "ds_sqldb_hospital",
+												"type": "DatasetReference",
+												"parameters": {
+													"DatabaseName": {
+														"value": "@item().database",
+														"type": "Expression"
+													},
+													"TableName": {
+														"value": "@item().tablename",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "ds_adls_navneet_emr_parquet",
+												"type": "DatasetReference",
+												"parameters": {
+													"Container": "@pipeline().parameters.LayerContainer",
+													"FilePath": "@concat(item().targetpath, '/', item().tablename)"
+												}
+											}
+										]
+									},
+									{
+										"name": "Insert Info into Audit for Full Load",
+										"type": "Lookup",
+										"dependsOn": [
+											{
+												"activity": "Copy Full Data",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureDatabricksDeltaLakeSource",
+												"query": {
+													"value": "@concat('insert into audit.load_logs(data_source, tablename, numberofrowscopied, watermarkcolumnname, loaddate) values(''', item().datasource, ''',''', item().tablename, ''',''', activity('Copy Full Data').output.rowscopied, ''',''', item().watermark, ''',''',  formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss'), ''')')\n",
+													"type": "Expression"
+												}
+											},
+											"dataset": {
+												"referenceName": "ds_adb_navneet_emr",
+												"type": "DatasetReference",
+												"parameters": {
+													"SchemaName": "dummy",
+													"TableName": "dummy"
+												}
+											},
+											"firstRowOnly": false
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			}
+		],
+		"concurrency": 10,
+		"parameters": {
+			"Container": {
+				"type": "string",
+				"defaultValue": "configs"
+			},
+			"FilePath": {
+				"type": "string",
+				"defaultValue": "emr/load_config.csv"
+			},
+			"LayerContainer": {
+				"type": "string",
+				"defaultValue": "bronze"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2025-01-11T11:33:29Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

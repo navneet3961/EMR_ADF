@@ -1,0 +1,9 @@
+{
+	"name": "adf-navneet-emr",
+	"location": "centralindia",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "263df8f2-1065-403c-87e5-00ae492c7fb9",
+		"tenantId": "a5d4a1ec-48d2-4d80-a30d-86e44e3a4dfb"
+	}
+}

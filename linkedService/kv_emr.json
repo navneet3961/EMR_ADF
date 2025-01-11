@@ -1,0 +1,11 @@
+{
+	"name": "kv_emr",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureKeyVault",
+		"typeProperties": {
+			"baseUrl": "https://kv-navneet-emr.vault.azure.net/"
+		}
+	}
+}

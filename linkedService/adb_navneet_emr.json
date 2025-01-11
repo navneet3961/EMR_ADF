@@ -1,0 +1,20 @@
+{
+	"name": "adb_navneet_emr",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureDatabricksDeltaLake",
+		"typeProperties": {
+			"domain": "https://adb-2749738545666414.14.azuredatabricks.net",
+			"clusterId": "0104-191558-5vejdsb0",
+			"accessToken": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "kv_emr",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "adbs-emr-access-token"
+			}
+		}
+	}
+}

@@ -1,0 +1,54 @@
+{
+	"name": "pl_executable",
+	"properties": {
+		"activities": [
+			{
+				"name": "Execute Source To Bronze",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "pl_src_to_bronze",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"Container": "configs",
+						"FilePath": "emr/load_config.csv",
+						"LayerContainer": "bronze"
+					}
+				}
+			},
+			{
+				"name": "Execute Silver To Gold",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute Source To Bronze",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "pl_silver_to_gold",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			}
+		],
+		"annotations": [],
+		"lastPublishTime": "2025-01-11T13:01:17Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

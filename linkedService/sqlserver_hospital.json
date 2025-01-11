@@ -1,0 +1,29 @@
+{
+	"name": "sqlserver_hospital",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"parameters": {
+			"DatabaseName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "SqlServer",
+		"typeProperties": {
+			"server": "navneet-emr.database.windows.net",
+			"database": "@{linkedService().DatabaseName}",
+			"encrypt": "True",
+			"trustServerCertificate": false,
+			"authenticationType": "SQL",
+			"userName": "navneet",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "kv_emr",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "sqlserver-emr-password"
+			}
+		}
+	}
+}

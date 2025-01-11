@@ -1,0 +1,19 @@
+{
+	"name": "adls_navneet_emr",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "https://adlsnavneetemr.dfs.core.windows.net/",
+			"accountKey": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "kv_emr",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "adls-emr-access-key"
+			}
+		}
+	}
+}
